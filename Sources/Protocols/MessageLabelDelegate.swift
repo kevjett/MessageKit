@@ -32,24 +32,56 @@ public protocol MessageLabelDelegate: AnyObject {
     /// - Parameters:
     ///   - addressComponents: The components of the selected address.
     func didSelectAddress(_ addressComponents: [String: String])
+    
+    /// Returns the text to show for the address text segment
+    ///
+    /// - Parameters:
+    ///   - addressComponents: The components of the selected address.
+    ///   - from: The original text
+    /// - Returns: The text to show for  segment. Defaults to no change.
+    func replaceAddress(_ addressComponents: [String: String], from text: String) -> String
 
     /// Triggered when a tap occurs on a detected date.
     ///
     /// - Parameters:
     ///   - date: The selected date.
     func didSelectDate(_ date: Date)
+    
+    /// Returns the text to show for the date text segment
+    ///
+    /// - Parameters:
+    ///   - date: The selected date.
+    ///   - from: The original text
+    /// - Returns: The text to show for  segment. Defaults to no change.
+    func replaceDate(_ date: Date, from text: String) -> String
 
     /// Triggered when a tap occurs on a detected phone number.
     ///
     /// - Parameters:
     ///   - phoneNumber: The selected phone number.
     func didSelectPhoneNumber(_ phoneNumber: String)
+    
+    /// Returns the text to show for the phone number text segment
+    ///
+    /// - Parameters:
+    ///   - phoneNumber: The selected phone number.
+    ///   - from: The original text
+    /// - Returns: The text to show for  segment. Defaults to no change.
+    func replacePhoneNumber(_ phoneNumber: String, from text: String) -> String
 
     /// Triggered when a tap occurs on a detected URL.
     ///
     /// - Parameters:
     ///   - url: The selected URL.
     func didSelectURL(_ url: URL)
+    
+    /// Returns the text to show for the url text segment
+    ///
+    /// - Parameters:
+    ///   - url: The selected url.
+    ///   - from: The original text
+    /// - Returns: The text to show for  segment. Defaults to no change.
+    func replaceUrl(_ url: URL, from text: String) -> String
 
     /// Triggered when a tap occurs on detected transit information.
     ///
@@ -57,17 +89,41 @@ public protocol MessageLabelDelegate: AnyObject {
     ///   - transitInformation: The selected transit information.
     func didSelectTransitInformation(_ transitInformation: [String: String])
     
+    /// Returns the text to show for the transit information text segment
+    ///
+    /// - Parameters:
+    ///   - transitInformation: The selected transit information.
+    ///   - from: The original text
+    /// - Returns: The text to show for  segment. Defaults to no change.
+    func replaceTransitInformation(_ transitInformation: [String: String], from text: String) -> String
+    
     /// Triggered when a tap occurs on a mention
     ///
     /// - Parameters:
     ///   - mention: The selected mention
     func didSelectMention(_ mention: String)
     
+    /// Returns the text to show for the mention text segment
+    ///
+    /// - Parameters:
+    ///   - mention: The selected mention.
+    ///   - from: The original text
+    /// - Returns: The text to show for  segment. Defaults to no change.
+    func replaceMention(_ mention: String) -> String
+    
     /// Triggered when a tap occurs on a hashtag
     ///
     /// - Parameters:
     ///   - mention: The selected hashtag
     func didSelectHashtag(_ hashtag: String)
+    
+    /// Returns the text to show for the hashtag text segment
+    ///
+    /// - Parameters:
+    ///   - hashtag: The selected hashtag.
+    ///   - from: The original text
+    /// - Returns: The text to show for  segment. Defaults to no change.
+    func replaceHashtag(_ hashtag: String) -> String
 
     /// Triggered when a tap occurs on a custom regular expression
     ///
@@ -75,25 +131,65 @@ public protocol MessageLabelDelegate: AnyObject {
     ///   - pattern: the pattern of the regular expression
     ///   - match: part that match with the regular expression
     func didSelectCustom(_ pattern: String, match: String?)
+    
+    /// Returns the text to show for the hashtag text segment
+    ///
+    /// - Parameters:
+    ///   - pattern: the pattern of the regular expression
+    ///   - match: part that match with the regular expression
+    /// - Returns: The text to show for  segment. Defaults to no change.
+    func replaceCustom(_ pattern: String, match: String) -> String
 
 }
 
 public extension MessageLabelDelegate {
 
     func didSelectAddress(_ addressComponents: [String: String]) {}
+    
+    func replaceAddress(_ addressComponents: [String: String], from text: String) -> String {
+        return text
+    }
 
     func didSelectDate(_ date: Date) {}
+    
+    func replaceDate(_ date: Date, from text: String) -> String {
+        return text
+    }
 
     func didSelectPhoneNumber(_ phoneNumber: String) {}
+    
+    func replacePhoneNumber(_ phoneNumber: String, from text: String) -> String {
+        return text
+    }
 
     func didSelectURL(_ url: URL) {}
     
+    func replaceUrl(_ url: URL, from text: String) -> String {
+        return text
+    }
+    
     func didSelectTransitInformation(_ transitInformation: [String: String]) {}
+    
+    func replaceTransitInformation(_ transitInformation: [String: String], from text: String) -> String {
+        return text
+    }
 
     func didSelectMention(_ mention: String) {}
+    
+    func replaceMention(_ mention: String) -> String {
+        return mention
+    }
 
     func didSelectHashtag(_ hashtag: String) {}
+    
+    func replaceHashtag(_ hashtag: String) -> String {
+        return hashtag
+    }
 
     func didSelectCustom(_ pattern: String, match: String?) {}
+    
+    func replaceCustom(_ pattern: String, match: String) -> String {
+        return match
+    }
 
 }

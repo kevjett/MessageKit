@@ -49,7 +49,7 @@ open class MessageLabel: UILabel {
         return textStorage
     }()
 
-    internal lazy var rangesForDetectors: [DetectorType: [(NSRange, MessageTextCheckingType)]] = [:]
+    internal lazy var rangesForDetectors: [DetectorType: [(NSRange, MessageTextCheckingType, NSRange, String)]] = [:]
     
     private var isConfiguring: Bool = false
 
@@ -238,8 +238,9 @@ open class MessageLabel: UILabel {
         for (detector, rangeTuples) in rangesForDetectors {
             if enabledDetectors.contains(detector) {
                 let attributes = detectorAttributes(for: detector)
-                rangeTuples.forEach { (range, _) in
-                    mutableText.addAttributes(attributes, range: range)
+                rangeTuples.forEach { (range, _, newRange, newSegment) in
+                    mutableText.replaceCharacters(in: range, with: newSegment)
+                    mutableText.addAttributes(attributes, range: newRange)
                 }
             }
         }
@@ -272,14 +273,16 @@ open class MessageLabel: UILabel {
         for detector in detectors {
             guard let rangeTuples = rangesForDetectors[detector] else { continue }
 
-            for (range, _)  in rangeTuples {
+            for (range, _, newRange, newSegment)  in rangeTuples {
                 // This will enable us to attribute it with our own styles, since `UILabel` does not provide link attribute overrides like `UITextView` does
                 if detector.textCheckingType == .link {
                     mutableAttributedString.removeAttribute(NSAttributedString.Key.link, range: range)
                 }
+                
+                mutableAttributedString.replaceCharacters(in: range, with: newSegment)
 
                 let attributes = detectorAttributes(for: detector)
-                mutableAttributedString.addAttributes(attributes, range: range)
+                mutableAttributedString.addAttributes(attributes, range: newRange)
             }
 
             let updatedString = NSAttributedString(attributedString: mutableAttributedString)
@@ -384,45 +387,67 @@ open class MessageLabel: UILabel {
 
         guard checkingResults.isEmpty == false else { return }
         
+        var offset = 0
+        
         for result in checkingResults {
+            guard let text = text, let range = Range(result.range, in: text) else {
+                return
+            }
+            
+            let segment = String(text[range])
+            var newSegment = segment
+            let offsetRange = result.range.location + offset
 
             switch result.resultType {
             case .address:
                 var ranges = rangesForDetectors[.address] ?? []
-                let tuple: (NSRange, MessageTextCheckingType) = (result.range, .addressComponents(result.addressComponents))
+                newSegment = getReplacementText(for: .address, result: result)
+                let newRange = NSMakeRange(offsetRange, newSegment.count)
+                let tuple: (NSRange, MessageTextCheckingType, NSRange, String) = (result.range, .addressComponents(result.addressComponents), newRange, newSegment)
                 ranges.append(tuple)
                 rangesForDetectors.updateValue(ranges, forKey: .address)
             case .date:
                 var ranges = rangesForDetectors[.date] ?? []
-                let tuple: (NSRange, MessageTextCheckingType) = (result.range, .date(result.date))
+                newSegment = getReplacementText(for: .date, result: result)
+                let newRange = NSMakeRange(offsetRange, newSegment.count)
+                let tuple: (NSRange, MessageTextCheckingType, NSRange, String) = (result.range, .date(result.date), newRange, newSegment)
                 ranges.append(tuple)
                 rangesForDetectors.updateValue(ranges, forKey: .date)
             case .phoneNumber:
                 var ranges = rangesForDetectors[.phoneNumber] ?? []
-                let tuple: (NSRange, MessageTextCheckingType) = (result.range, .phoneNumber(result.phoneNumber))
+                newSegment = getReplacementText(for: .phoneNumber, result: result)
+                let newRange = NSMakeRange(offsetRange, newSegment.count)
+                let tuple: (NSRange, MessageTextCheckingType, NSRange, String) = (result.range, .phoneNumber(result.phoneNumber), newRange, newSegment)
                 ranges.append(tuple)
                 rangesForDetectors.updateValue(ranges, forKey: .phoneNumber)
             case .link:
                 var ranges = rangesForDetectors[.url] ?? []
-                let tuple: (NSRange, MessageTextCheckingType) = (result.range, .link(result.url))
+                newSegment = getReplacementText(for: .url, result: result)
+                let newRange = NSMakeRange(offsetRange, newSegment.count)
+                let tuple: (NSRange, MessageTextCheckingType, NSRange, String) = (result.range, .link(result.url), newRange, newSegment)
                 ranges.append(tuple)
                 rangesForDetectors.updateValue(ranges, forKey: .url)
             case .transitInformation:
                 var ranges = rangesForDetectors[.transitInformation] ?? []
-                let tuple: (NSRange, MessageTextCheckingType) = (result.range, .transitInfoComponents(result.components))
+                newSegment = getReplacementText(for: .transitInformation, result: result)
+                let newRange = NSMakeRange(offsetRange, newSegment.count)
+                let tuple: (NSRange, MessageTextCheckingType, NSRange, String) = (result.range, .transitInfoComponents(result.components), newRange, newSegment)
                 ranges.append(tuple)
                 rangesForDetectors.updateValue(ranges, forKey: .transitInformation)
             case .regularExpression:
-                guard let text = text, let regex = result.regularExpression, let range = Range(result.range, in: text) else { return }
+                guard let regex = result.regularExpression else { return }
                 let detector = DetectorType.custom(regex)
                 var ranges = rangesForDetectors[detector] ?? []
-                let tuple: (NSRange, MessageTextCheckingType) = (result.range, .custom(pattern: regex.pattern, match: String(text[range])))
+                let newSegment = getReplacementText(for: .custom(regex), result: result)
+                let newRange = NSMakeRange(offsetRange, newSegment.count)
+                let tuple: (NSRange, MessageTextCheckingType, NSRange, String) = (result.range, .custom(pattern: regex.pattern, match: String(text[range])), newRange, newSegment)
                 ranges.append(tuple)
                 rangesForDetectors.updateValue(ranges, forKey: detector)
             default:
                 fatalError("Received an unrecognized NSTextCheckingResult.CheckingType")
             }
 
+            offset += newSegment.count - segment.count
         }
 
     }
@@ -450,14 +475,60 @@ open class MessageLabel: UILabel {
         return characterIndex
 
     }
+    
+    private func getReplacementText(for detectorType: DetectorType, result: NSTextCheckingResult) -> String {
+        guard let delegate = delegate, let text = text, let range = Range(result.range, in: text) else {
+            return ""
+        }
+        
+        let segment = String(text[range])
+        
+        switch result.resultType {
+            case .address:
+                var transformedAddressComponents = [String: String]()
+                guard let addressComponents = result.addressComponents else { return segment }
+                addressComponents.forEach { (key, value) in
+                    transformedAddressComponents[key.rawValue] = value
+                }
+                return delegate.replaceAddress(transformedAddressComponents, from: segment)
+            case .phoneNumber:
+                guard let phoneNumber = result.phoneNumber else { return segment }
+                return delegate.replacePhoneNumber(phoneNumber, from: segment)
+            case .date:
+                guard let date = result.date else { return segment }
+                return delegate.replaceDate(date, from: segment)
+            case .link:
+                guard let url = result.url else { return segment }
+                return delegate.replaceUrl(url, from: segment)
+            case .transitInformation:
+                var transformedTransitInformation = [String: String]()
+                guard let transitInformation = result.components else { return segment }
+                transitInformation.forEach { (key, value) in
+                    transformedTransitInformation[key.rawValue] = value
+                }
+                return delegate.replaceTransitInformation(transformedTransitInformation, from: segment)
+            case .regularExpression:
+                guard let regex = result.regularExpression else { return segment }
+                switch detectorType {
+                case .hashtag:
+                    return delegate.replaceHashtag(segment)
+                case .mention:
+                    return delegate.replaceMention(segment)
+                default:
+                    return delegate.replaceCustom(regex.pattern, match: segment)
+                }
+            default:
+                fatalError("Received an unrecognized NSTextCheckingResult.CheckingType")
+        }
+    }
 
   open func handleGesture(_ touchLocation: CGPoint) -> Bool {
 
         guard let index = stringIndex(at: touchLocation) else { return false }
 
         for (detectorType, ranges) in rangesForDetectors {
-            for (range, value) in ranges {
-                if range.contains(index) {
+            for (range, value, newRange, _) in ranges {
+                if newRange.contains(index) {
                     handleGesture(for: detectorType, value: value)
                     return true
                 }
